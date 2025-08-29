@@ -1,18 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any,no-console */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig } from '@/lib/config';
 import { API_CONFIG } from '@/lib/config';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
-  const authInfo = getAuthInfoFromCookie(request);
-  if (!authInfo || !authInfo.username) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  // Auth check removed.
 
   const { searchParams } = new URL(request.url);
   const searchKeyword = searchParams.get('q');
@@ -59,7 +55,9 @@ export async function GET(request: NextRequest) {
       const startEvent = `data: ${JSON.stringify({
         type: 'start',
         totalSources: apiSites.length
-      })}\n\n`;
+      })}
+
+`;
 
       if (!safeEnqueue(encoder.encode(startEvent))) {
         return;
@@ -123,7 +121,9 @@ export async function GET(request: NextRequest) {
                 type: 'source_result',
                 source: site.key,
                 status
-              })}\n\n`;
+              })}
+
+`;
 
               if (!safeEnqueue(encoder.encode(sourceEvent))) {
                 streamClosed = true;
@@ -146,7 +146,9 @@ export async function GET(request: NextRequest) {
               type: 'source_error',
               source: site.key,
               status: 'invalid'
-            })}\n\n`;
+            })}
+
+`;
 
             if (!safeEnqueue(encoder.encode(errorEvent))) {
               streamClosed = true;
@@ -162,7 +164,9 @@ export async function GET(request: NextRequest) {
             const completeEvent = `data: ${JSON.stringify({
               type: 'complete',
               completedSources
-            })}\n\n`;
+            })}
+
+`;
 
             if (safeEnqueue(encoder.encode(completeEvent))) {
               try {

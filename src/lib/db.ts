@@ -1,245 +1,147 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { AdminConfig } from './admin.types';
-import { KvrocksStorage } from './kvrocks.db';
-import { RedisStorage } from './redis.db';
-import { Favorite, IStorage, PlayRecord, SkipConfig } from './types';
-import { UpstashRedisStorage } from './upstash.db';
+import { JsonDB } from './json.db';
+import { Favorite, PlayRecord, SkipConfig } from './types';
 
-// storage type 常量: 'localstorage' | 'redis' | 'upstash'，默认 'localstorage'
-const STORAGE_TYPE =
-  (process.env.NEXT_PUBLIC_STORAGE_TYPE as
-    | 'localstorage'
-    | 'redis'
-    | 'upstash'
-    | 'kvrocks'
-    | undefined) || 'localstorage';
+// We are now hard-coding the use of JsonDB. No more STORAGE_TYPE or user management.
+const storage = new JsonDB();
 
-// 创建存储实例
-function createStorage(): IStorage {
-  switch (STORAGE_TYPE) {
-    case 'redis':
-      return new RedisStorage();
-    case 'upstash':
-      return new UpstashRedisStorage();
-    case 'kvrocks':
-      return new KvrocksStorage();
-    case 'localstorage':
-    default:
-      return null as unknown as IStorage;
-  }
-}
-
-// 单例存储实例
-let storageInstance: IStorage | null = null;
-
-function getStorage(): IStorage {
-  if (!storageInstance) {
-    storageInstance = createStorage();
-  }
-  return storageInstance;
-}
-
-// 工具函数：生成存储key
+// This key generation is still useful for identifying media.
 export function generateStorageKey(source: string, id: string): string {
   return `${source}+${id}`;
 }
 
-// 导出便捷方法
-export class DbManager {
-  private storage: IStorage;
-
-  constructor() {
-    this.storage = getStorage();
+class SimpleDbManager {
+  private async getCollection(name: string): Promise<any> {
+    const collection = await storage.get(name);
+    return collection || {};
   }
 
-  // 播放记录相关方法
-  async getPlayRecord(
-    userName: string,
-    source: string,
-    id: string
-  ): Promise<PlayRecord | null> {
-    const key = generateStorageKey(source, id);
-    return this.storage.getPlayRecord(userName, key);
+  private async saveCollection(name: string, data: any): Promise<void> {
+    await storage.set(name, data);
   }
 
-  async savePlayRecord(
-    userName: string,
-    source: string,
-    id: string,
-    record: PlayRecord
-  ): Promise<void> {
-    const key = generateStorageKey(source, id);
-    await this.storage.setPlayRecord(userName, key, record);
-  }
-
-  async getAllPlayRecords(userName: string): Promise<{
-    [key: string]: PlayRecord;
-  }> {
-    return this.storage.getAllPlayRecords(userName);
-  }
-
-  async deletePlayRecord(
-    userName: string,
-    source: string,
-    id: string
-  ): Promise<void> {
-    const key = generateStorageKey(source, id);
-    await this.storage.deletePlayRecord(userName, key);
-  }
-
-  // 收藏相关方法
-  async getFavorite(
-    userName: string,
-    source: string,
-    id: string
-  ): Promise<Favorite | null> {
-    const key = generateStorageKey(source, id);
-    return this.storage.getFavorite(userName, key);
-  }
-
-  async saveFavorite(
-    userName: string,
-    source: string,
-    id: string,
-    favorite: Favorite
-  ): Promise<void> {
-    const key = generateStorageKey(source, id);
-    await this.storage.setFavorite(userName, key, favorite);
-  }
-
-  async getAllFavorites(
-    userName: string
-  ): Promise<{ [key: string]: Favorite }> {
-    return this.storage.getAllFavorites(userName);
-  }
-
-  async deleteFavorite(
-    userName: string,
-    source: string,
-    id: string
-  ): Promise<void> {
-    const key = generateStorageKey(source, id);
-    await this.storage.deleteFavorite(userName, key);
-  }
-
-  async isFavorited(
-    userName: string,
-    source: string,
-    id: string
-  ): Promise<boolean> {
-    const favorite = await this.getFavorite(userName, source, id);
-    return favorite !== null;
-  }
-
-  // ---------- 用户相关 ----------
-  async registerUser(userName: string, password: string): Promise<void> {
-    await this.storage.registerUser(userName, password);
-  }
-
-  async verifyUser(userName: string, password: string): Promise<boolean> {
-    return this.storage.verifyUser(userName, password);
-  }
-
-  // 检查用户是否已存在
-  async checkUserExist(userName: string): Promise<boolean> {
-    return this.storage.checkUserExist(userName);
-  }
-
-  async changePassword(userName: string, newPassword: string): Promise<void> {
-    await this.storage.changePassword(userName, newPassword);
-  }
-
-  async deleteUser(userName: string): Promise<void> {
-    await this.storage.deleteUser(userName);
-  }
-
-  // ---------- 搜索历史 ----------
-  async getSearchHistory(userName: string): Promise<string[]> {
-    return this.storage.getSearchHistory(userName);
-  }
-
-  async addSearchHistory(userName: string, keyword: string): Promise<void> {
-    await this.storage.addSearchHistory(userName, keyword);
-  }
-
-  async deleteSearchHistory(userName: string, keyword?: string): Promise<void> {
-    await this.storage.deleteSearchHistory(userName, keyword);
-  }
-
-  // 获取全部用户名
-  async getAllUsers(): Promise<string[]> {
-    if (typeof (this.storage as any).getAllUsers === 'function') {
-      return (this.storage as any).getAllUsers();
-    }
-    return [];
-  }
-
-  // ---------- 管理员配置 ----------
+  // --- Config ---
   async getAdminConfig(): Promise<AdminConfig | null> {
-    if (typeof (this.storage as any).getAdminConfig === 'function') {
-      return (this.storage as any).getAdminConfig();
-    }
-    return null;
+    return storage.getConfig();
   }
 
   async saveAdminConfig(config: AdminConfig): Promise<void> {
-    if (typeof (this.storage as any).setAdminConfig === 'function') {
-      await (this.storage as any).setAdminConfig(config);
-    }
+    await storage.setConfig(config);
   }
 
-  // ---------- 跳过片头片尾配置 ----------
-  async getSkipConfig(
-    userName: string,
-    source: string,
-    id: string
-  ): Promise<SkipConfig | null> {
-    if (typeof (this.storage as any).getSkipConfig === 'function') {
-      return (this.storage as any).getSkipConfig(userName, source, id);
-    }
-    return null;
+  // --- Play Records (Single User) ---
+  async getPlayRecord(source: string, id: string): Promise<PlayRecord | null> {
+    const key = generateStorageKey(source, id);
+    const records = await this.getCollection('playRecords');
+    return records[key] || null;
   }
 
-  async setSkipConfig(
-    userName: string,
-    source: string,
-    id: string,
-    config: SkipConfig
-  ): Promise<void> {
-    if (typeof (this.storage as any).setSkipConfig === 'function') {
-      await (this.storage as any).setSkipConfig(userName, source, id, config);
-    }
+  async savePlayRecord(source: string, id: string, record: PlayRecord): Promise<void> {
+    const key = generateStorageKey(source, id);
+    const records = await this.getCollection('playRecords');
+    records[key] = record;
+    await this.saveCollection('playRecords', records);
   }
 
-  async deleteSkipConfig(
-    userName: string,
-    source: string,
-    id: string
-  ): Promise<void> {
-    if (typeof (this.storage as any).deleteSkipConfig === 'function') {
-      await (this.storage as any).deleteSkipConfig(userName, source, id);
-    }
+  async getAllPlayRecords(): Promise<{ [key: string]: PlayRecord }> {
+    return this.getCollection('playRecords');
   }
 
-  async getAllSkipConfigs(
-    userName: string
-  ): Promise<{ [key: string]: SkipConfig }> {
-    if (typeof (this.storage as any).getAllSkipConfigs === 'function') {
-      return (this.storage as any).getAllSkipConfigs(userName);
-    }
-    return {};
+  async deletePlayRecord(source: string, id: string): Promise<void> {
+    const key = generateStorageKey(source, id);
+    const records = await this.getCollection('playRecords');
+    delete records[key];
+    await this.saveCollection('playRecords', records);
   }
 
-  // ---------- 数据清理 ----------
-  async clearAllData(): Promise<void> {
-    if (typeof (this.storage as any).clearAllData === 'function') {
-      await (this.storage as any).clearAllData();
+  // --- Favorites (Single User) ---
+  async getFavorite(source: string, id: string): Promise<Favorite | null> {
+    const key = generateStorageKey(source, id);
+    const favorites = await this.getCollection('favorites');
+    return favorites[key] || null;
+  }
+
+  async saveFavorite(source: string, id: string, favorite: Favorite): Promise<void> {
+    const key = generateStorageKey(source, id);
+    const favorites = await this.getCollection('favorites');
+    favorites[key] = favorite;
+    await this.saveCollection('favorites', favorites);
+  }
+
+  async getAllFavorites(): Promise<{ [key: string]: Favorite }> {
+    return this.getCollection('favorites');
+  }
+
+  async deleteFavorite(source: string, id: string): Promise<void> {
+    const key = generateStorageKey(source, id);
+    const favorites = await this.getCollection('favorites');
+    delete favorites[key];
+    await this.saveCollection('favorites', favorites);
+  }
+
+  async isFavorited(source: string, id: string): Promise<boolean> {
+    const favorite = await this.getFavorite(source, id);
+    return favorite !== null;
+  }
+  
+  // --- Search History (Single User) ---
+  async getSearchHistory(): Promise<string[]> {
+    const history = await storage.get('searchHistory');
+    return Array.isArray(history) ? history : [];
+  }
+
+  async addSearchHistory(keyword: string): Promise<void> {
+    let history = await this.getSearchHistory();
+    history = [keyword, ...history.filter(k => k !== keyword)].slice(0, 20); // Keep latest 20
+    await storage.set('searchHistory', history);
+  }
+
+  async deleteSearchHistory(keyword?: string): Promise<void> {
+    if (keyword) {
+      let history = await this.getSearchHistory();
+      history = history.filter(k => k !== keyword);
+      await storage.set('searchHistory', history);
     } else {
-      throw new Error('存储类型不支持清空数据操作');
+      await storage.del('searchHistory');
     }
+  }
+
+  // --- Skip Configs (Single User) ---
+  async getSkipConfig(source: string, id: string): Promise<SkipConfig | null> {
+    const key = `skip_${generateStorageKey(source, id)}`;
+    const configs = await this.getCollection('skipConfigs');
+    return configs[key] || null;
+  }
+
+  async setSkipConfig(source: string, id: string, config: SkipConfig): Promise<void> {
+    const key = `skip_${generateStorageKey(source, id)}`;
+    const configs = await this.getCollection('skipConfigs');
+    configs[key] = config;
+    await this.saveCollection('skipConfigs', configs);
+  }
+
+  async deleteSkipConfig(source: string, id: string): Promise<void> {
+    const key = `skip_${generateStorageKey(source, id)}`;
+    const configs = await this.getCollection('skipConfigs');
+    delete configs[key];
+    await this.saveCollection('skipConfigs', configs);
+  }
+
+  async getAllSkipConfigs(): Promise<{ [key: string]: SkipConfig }> {
+    return this.getCollection('skipConfigs');
+  }
+
+  // --- All user management methods are removed ---
+  // --- Data clear is a useful admin feature, so we keep it ---
+  async clearAllData(): Promise<void> {
+    await storage.del('playRecords');
+    await storage.del('favorites');
+    await storage.del('searchHistory');
+    await storage.del('skipConfigs');
   }
 }
 
-// 导出默认实例
-export const db = new DbManager();
+// Export the simplified, single-user db manager instance
+export const db = new SimpleDbManager();

@@ -1,0 +1,28 @@
+{
+  "config": {
+    "ConfigSubscribtion": {
+      "URL": "",
+      "AutoUpdate": false,
+      "LastCheck": ""
+    },
+    "ConfigFile": "",
+    "SiteConfig": {
+      "SiteName": "LunaTV",
+      "Announcement": "",
+      "SearchDownstreamMaxPage": 5,
+      "SiteInterfaceCacheTime": 7200,
+      "DoubanProxyType": "cmliussss-cdn-tencent",
+      "DoubanProxy": "",
+      "DoubanImageProxyType": "cmliussss-cdn-tencent",
+      "DoubanImageProxy": "",
+      "DisableYellowFilter": false,
+      "FluidSearch": true
+    },
+    "UserConfig": {
+      "Users": []
+    },
+    "SourceConfig": [],
+    "CustomCategories": [],
+    "LiveConfig": []
+  }
+}

@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any,no-console */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getAvailableApiSites, getConfig } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
 import { yellowWords } from '@/lib/yellow';
@@ -10,10 +9,7 @@ import { yellowWords } from '@/lib/yellow';
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
-  const authInfo = getAuthInfoFromCookie(request);
-  if (!authInfo || !authInfo.username) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  // authInfo check removed
 
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
@@ -31,7 +27,7 @@ export async function GET(request: NextRequest) {
   }
 
   const config = await getConfig();
-  const apiSites = await getAvailableApiSites(authInfo.username);
+  const apiSites = await getAvailableApiSites(); // username removed
 
   // 共享状态
   let streamClosed = false;
@@ -64,7 +60,9 @@ export async function GET(request: NextRequest) {
         query,
         totalSources: apiSites.length,
         timestamp: Date.now()
-      })}\n\n`;
+      })}
+
+`;
 
       if (!safeEnqueue(encoder.encode(startEvent))) {
         return; // 连接已关闭，提前退出
@@ -106,7 +104,9 @@ export async function GET(request: NextRequest) {
               sourceName: site.name,
               results: filteredResults,
               timestamp: Date.now()
-            })}\n\n`;
+            })}
+
+`;
 
             if (!safeEnqueue(encoder.encode(sourceEvent))) {
               streamClosed = true;
@@ -131,7 +131,9 @@ export async function GET(request: NextRequest) {
               sourceName: site.name,
               error: error instanceof Error ? error.message : '搜索失败',
               timestamp: Date.now()
-            })}\n\n`;
+            })}
+
+`;
 
             if (!safeEnqueue(encoder.encode(errorEvent))) {
               streamClosed = true;
@@ -149,7 +151,9 @@ export async function GET(request: NextRequest) {
               totalResults: allResults.length,
               completedSources,
               timestamp: Date.now()
-            })}\n\n`;
+            })}
+
+`;
 
             if (safeEnqueue(encoder.encode(completeEvent))) {
               // 只有在成功发送完成事件后才关闭流

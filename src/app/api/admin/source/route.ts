@@ -2,7 +2,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 
@@ -16,44 +15,18 @@ interface BaseBody {
 }
 
 export async function POST(request: NextRequest) {
-  const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
-  if (storageType === 'localstorage') {
-    return NextResponse.json(
-      {
-        error: '不支持本地存储进行管理员配置',
-      },
-      { status: 400 }
-    );
-  }
-
   try {
     const body = (await request.json()) as BaseBody & Record<string, any>;
     const { action } = body;
 
-    const authInfo = getAuthInfoFromCookie(request);
-    if (!authInfo || !authInfo.username) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    const username = authInfo.username;
-
     // 基础校验
     const ACTIONS: Action[] = ['add', 'disable', 'enable', 'delete', 'sort', 'batch_disable', 'batch_enable', 'batch_delete'];
-    if (!username || !action || !ACTIONS.includes(action)) {
+    if (!action || !ACTIONS.includes(action)) {
       return NextResponse.json({ error: '参数格式错误' }, { status: 400 });
     }
 
     // 获取配置与存储
     const adminConfig = await getConfig();
-
-    // 权限与身份校验
-    if (username !== process.env.USERNAME) {
-      const userEntry = adminConfig.UserConfig.Users.find(
-        (u) => u.username === username
-      );
-      if (!userEntry || userEntry.role !== 'admin' || userEntry.banned) {
-        return NextResponse.json({ error: '权限不足' }, { status: 401 });
-      }
-    }
 
     switch (action) {
       case 'add': {
@@ -111,23 +84,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: '该源不可删除' }, { status: 400 });
         }
         adminConfig.SourceConfig.splice(idx, 1);
-
-        // 检查并清理用户组和用户的权限数组
-        // 清理用户组权限
-        if (adminConfig.UserConfig.Tags) {
-          adminConfig.UserConfig.Tags.forEach(tag => {
-            if (tag.enabledApis) {
-              tag.enabledApis = tag.enabledApis.filter(api => api !== key);
-            }
-          });
-        }
-
-        // 清理用户权限
-        adminConfig.UserConfig.Users.forEach(user => {
-          if (user.enabledApis) {
-            user.enabledApis = user.enabledApis.filter(api => api !== key);
-          }
-        });
+        // REMOVED: User permission cleanup logic is no longer needed
         break;
       }
       case 'batch_disable': {
@@ -174,25 +131,7 @@ export async function POST(request: NextRequest) {
             adminConfig.SourceConfig.splice(idx, 1);
           }
         });
-
-        // 检查并清理用户组和用户的权限数组
-        if (keysToDelete.length > 0) {
-          // 清理用户组权限
-          if (adminConfig.UserConfig.Tags) {
-            adminConfig.UserConfig.Tags.forEach(tag => {
-              if (tag.enabledApis) {
-                tag.enabledApis = tag.enabledApis.filter(api => !keysToDelete.includes(api));
-              }
-            });
-          }
-
-          // 清理用户权限
-          adminConfig.UserConfig.Users.forEach(user => {
-            if (user.enabledApis) {
-              user.enabledApis = user.enabledApis.filter(api => !keysToDelete.includes(api));
-            }
-          });
-        }
+        // REMOVED: User permission cleanup logic is no longer needed
         break;
       }
       case 'sort': {
